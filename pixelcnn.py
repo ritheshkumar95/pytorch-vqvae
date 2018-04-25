@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import datasets, transforms
-from modules import AutoEncoder, PixelCNN, to_scalar
+from modules import AutoEncoder, GatedPixelCNN, to_scalar
 from torch.autograd import Variable
 import numpy as np
 from torchvision.utils import save_image
@@ -16,12 +16,14 @@ PRINT_INTERVAL = 100
 N_EPOCHS = 100
 
 
+preproc_transform = transforms.Compose([
+    transforms.ToTensor(),
+    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+])
 train_loader = torch.utils.data.DataLoader(
     datasets.CIFAR10(
         '../data/cifar10/', train=True, download=True,
-        transform=transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-        )
+        transform=preproc_transform,
     ), batch_size=BATCH_SIZE, shuffle=False,
     num_workers=NUM_WORKERS, pin_memory=True
 )
@@ -29,9 +31,7 @@ train_loader = torch.utils.data.DataLoader(
 test_loader = torch.utils.data.DataLoader(
     datasets.CIFAR10(
         '../data/cifar10/', train=False,
-        transform=transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-        )
+        transform=preproc_transform
     ), batch_size=BATCH_SIZE, shuffle=False,
     num_workers=NUM_WORKERS, pin_memory=True
 )
@@ -40,7 +40,7 @@ autoencoder = AutoEncoder(K).cuda()
 autoencoder.load_state_dict(torch.load('best_autoencoder.pt'))
 autoencoder.eval()
 
-model = PixelCNN().cuda()
+model = GatedPixelCNN().cuda()
 criterion = nn.CrossEntropyLoss().cuda()
 opt = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -104,13 +104,23 @@ def test():
 def generate_samples():
     latents = model.generate()
     x_tilde, _ = autoencoder.decode(latents)
-    # images = ((x_tilde + 1) / 2).cpu().data
     images = x_tilde.cpu().data
     save_image(images, './sample_pixelcnn_cifar.png', nrow=8)
 
 
+def generate_reconstructions():
+    x, _ = test_loader.__iter__().next()
+    x = Variable(x[:32]).cuda()
+    latents, _ = autoencoder.encode(x)
+    x_tilde, _ = autoencoder.decode(latents)
+    x_cat = torch.cat([x, x_tilde], 0)
+    images = x_cat.cpu().data
+    save_image(images, './sample_cifar.png', nrow=8)
+
+
 BEST_LOSS = 999
 LAST_SAVED = -1
+generate_reconstructions()
 for epoch in range(1, N_EPOCHS):
     print("\nEpoch {}:".format(epoch))
     train()

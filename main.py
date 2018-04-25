@@ -100,8 +100,6 @@ def generate_samples():
     x, _ = test_loader.__iter__().next()
     x = Variable(x[:32]).cuda()
     x_tilde, _, _ = model(x)
-    # x_tilde = (x_tilde + 1)/2
-    # x = (x + 1)/2
 
     x_cat = torch.cat([x, x_tilde], 0)
     images = x_cat.cpu().data
