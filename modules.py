@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 def to_scalar(arr):
@@ -33,27 +32,27 @@ class ResBlock(nn.Module):
 
 
 class AutoEncoder(nn.Module):
-    def __init__(self, K=512):
+    def __init__(self, input_dim, dim, K=512):
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 256, 4, 2, 1),
+            nn.Conv2d(input_dim, dim, 4, 2, 1),
             nn.ReLU(True),
-            nn.Conv2d(256, 256, 4, 2, 1),
-            ResBlock(256),
-            ResBlock(256),
+            nn.Conv2d(dim, dim, 4, 2, 1),
+            ResBlock(dim),
+            ResBlock(dim),
         )
 
-        self.embedding = nn.Embedding(K, 256)
+        self.embedding = nn.Embedding(K, dim)
         # self.embedding.weight.data.copy_(1./K * torch.randn(K, 256))
         self.embedding.weight.data.uniform_(-1./K, 1./K)
 
         self.decoder = nn.Sequential(
-            ResBlock(256),
-            ResBlock(256),
+            ResBlock(dim),
+            ResBlock(dim),
             nn.ReLU(True),
-            nn.ConvTranspose2d(256, 256, 4, 2, 1),
+            nn.ConvTranspose2d(dim, dim, 4, 2, 1),
             nn.ReLU(True),
-            nn.ConvTranspose2d(256, 3, 4, 2, 1),
+            nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
             nn.Tanh()
         )
 
@@ -94,11 +93,15 @@ class GatedActivation(nn.Module):
 
 
 class GatedMaskedConv2d(nn.Module):
-    def __init__(self, mask_type, dim, kernel, residual=True):
+    def __init__(self, mask_type, dim, kernel, residual=True, n_classes=10):
         super().__init__()
         assert kernel % 2 == 1, print("Kernel size must be odd")
         self.mask_type = mask_type
         self.residual = residual
+
+        self.class_cond_embedding = nn.Embedding(
+            n_classes, 2 * dim
+        )
 
         kernel_shp = (kernel // 2 + 1, kernel)  # (ceil(n/2), n)
         padding_shp = (kernel // 2, kernel // 2)
@@ -124,19 +127,20 @@ class GatedMaskedConv2d(nn.Module):
         self.vert_stack.weight.data[:, :, -1].zero_()  # Mask final row
         self.horiz_stack.weight.data[:, :, :, -1].zero_()  # Mask final column
 
-    def forward(self, x_v, x_h):
+    def forward(self, x_v, x_h, h):
         if self.mask_type == 'A':
             self.make_causal()
 
+        h = self.class_cond_embedding(h)
         h_vert = self.vert_stack(x_v)
         h_vert = h_vert[:, :, :x_v.size(-1), :]
-        out_v = self.gate(h_vert)
+        out_v = self.gate(h_vert + h[:, :, None, None])
 
         h_horiz = self.horiz_stack(x_h)
         h_horiz = h_horiz[:, :, :, :x_h.size(-2)]
         v2h = self.vert_to_horiz(h_vert)
 
-        out = self.gate(v2h + h_horiz)
+        out = self.gate(v2h + h_horiz + h[:, :, None, None])
         if self.residual:
             out_h = self.horiz_resid(out) + x_h
         else:
@@ -174,25 +178,23 @@ class GatedPixelCNN(nn.Module):
             nn.Conv2d(dim, input_dim, 1)
         )
 
-    def forward(self, x):
+    def forward(self, x, label):
         shp = x.size() + (-1, )
         x = self.embedding(x.view(-1)).view(shp)  # (B, H, W, C)
         x = x.permute(0, 3, 1, 2)  # (B, C, W, W)
 
         x_v, x_h = (x, x)
         for i, layer in enumerate(self.layers):
-            x_v, x_h = layer(x_v, x_h)
+            x_v, x_h = layer(x_v, x_h, label)
 
         return self.output_conv(x_h)
 
-    def generate(self, batch_size=64):
-        x = Variable(
-            torch.zeros(64, 8, 8).long()
-        ).cuda()
+    def generate(self, label, shape=(8, 8), batch_size=64):
+        x = torch.zeros(batch_size, *shape).long().cuda()
 
-        for i in range(8):
-            for j in range(8):
-                logits = self.forward(x)
+        for i in range(shape[0]):
+            for j in range(shape[1]):
+                logits = self.forward(x, label)
                 probs = F.softmax(logits[:, :, i, j], -1)
                 x.data[:, i, j].copy_(
                     probs.multinomial(1).squeeze().data
