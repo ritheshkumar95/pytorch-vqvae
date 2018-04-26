@@ -12,14 +12,14 @@ BATCH_SIZE = 128
 NUM_WORKERS = 4
 LR = 2e-4
 K = 512
-LAMDA = 0.25
+LAMDA = 1
 PRINT_INTERVAL = 100
 N_EPOCHS = 100
 
 
 preproc_transform = transforms.Compose([
     transforms.ToTensor(),
-    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 train_loader = torch.utils.data.DataLoader(
     datasets.CIFAR10(
@@ -102,7 +102,7 @@ def generate_samples():
     x_tilde, _, _ = model(x)
 
     x_cat = torch.cat([x, x_tilde], 0)
-    images = x_cat.cpu().data
+    images = (x_cat.cpu().data + 1) / 2
     save_image(images, './sample_cifar.png', nrow=8)
 
 

@@ -6,15 +6,15 @@ from torch.autograd import Variable
 
 def to_scalar(arr):
     if type(arr) == list:
-        return [x.cpu().data.tolist()[0] for x in arr]
+        return [x.item() for x in arr]
     else:
-        return arr.cpu().data.tolist()[0]
+        return arr.item()
 
 
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.xavier_uniform(m.weight.data)
+        nn.init.xavier_uniform_(m.weight.data)
         m.bias.data.fill_(0)
 
 
@@ -25,7 +25,7 @@ class ResBlock(nn.Module):
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 3, 1, 1),
             nn.ReLU(True),
-            nn.Conv2d(dim, dim, 1)
+            nn.Conv2d(dim, dim, 1),
         )
 
     def forward(self, x):
@@ -39,21 +39,22 @@ class AutoEncoder(nn.Module):
             nn.Conv2d(3, 256, 4, 2, 1),
             nn.ReLU(True),
             nn.Conv2d(256, 256, 4, 2, 1),
-            nn.ReLU(True),
             ResBlock(256),
             ResBlock(256),
         )
 
         self.embedding = nn.Embedding(K, 256)
-        self.embedding.weight.data.copy_(1./K * torch.randn(K, 256))
+        # self.embedding.weight.data.copy_(1./K * torch.randn(K, 256))
+        self.embedding.weight.data.uniform_(-1./K, 1./K)
 
         self.decoder = nn.Sequential(
             ResBlock(256),
             ResBlock(256),
+            nn.ReLU(True),
             nn.ConvTranspose2d(256, 256, 4, 2, 1),
             nn.ReLU(True),
             nn.ConvTranspose2d(256, 3, 4, 2, 1),
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
         self.apply(weights_init)
@@ -145,7 +146,7 @@ class GatedMaskedConv2d(nn.Module):
 
 
 class GatedPixelCNN(nn.Module):
-    def __init__(self, input_dim=256, dim=64, n_layers=7):
+    def __init__(self, input_dim=256, dim=64, n_layers=15):
         super().__init__()
         self.dim = 64
 
