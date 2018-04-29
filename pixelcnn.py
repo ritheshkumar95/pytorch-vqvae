@@ -115,7 +115,7 @@ def test():
 
 def generate_samples():
     label = torch.arange(10).expand(10, 10).contiguous().view(-1)
-    label = label.long().to(DEVICE)
+    label = label.to(device=DEVICE, dtype=torch.int64)
 
     latents = model.generate(label, shape=LATENT_SHAPE, batch_size=100)
     x_tilde, _ = autoencoder.decode(latents)

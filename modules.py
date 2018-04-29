@@ -191,8 +191,8 @@ class GatedPixelCNN(nn.Module):
 
     def generate(self, label, shape=(8, 8), batch_size=64):
         param = next(self.parameters())
-        x = torch.zeros(batch_size, *shape).long()
-        x = x.to(param.device)
+        x = torch.zeros((batch_size, *shape),
+            dtype=torch.int64, device=param.device)
 
         for i in range(shape[0]):
             for j in range(shape[1]):
