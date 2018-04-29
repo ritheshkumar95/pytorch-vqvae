@@ -19,6 +19,7 @@ K = 512
 LAMDA = 1
 LR = 2e-4
 
+DEVICE = torch.device('cuda') # torch.device('cpu')
 
 preproc_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -39,7 +40,7 @@ test_loader = torch.utils.data.DataLoader(
     num_workers=NUM_WORKERS, pin_memory=True
 )
 
-model = AutoEncoder(INPUT_DIM, DIM, K).cuda()
+model = AutoEncoder(INPUT_DIM, DIM, K).to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=LR)
 
 
@@ -47,7 +48,7 @@ def train():
     train_loss = []
     for batch_idx, (x, _) in enumerate(train_loader):
         start_time = time.time()
-        x = x.cuda()
+        x = x.to(DEVICE)
 
         opt.zero_grad()
 
@@ -85,7 +86,7 @@ def test():
     start_time = time.time()
     val_loss = []
     for batch_idx, (x, _) in enumerate(test_loader):
-        x = x.cuda()
+        x = x.to(DEVICE)
         x_tilde, z_e_x, z_q_x = model(x)
         loss_recons = F.mse_loss(x_tilde, x)
         loss_vq = F.mse_loss(z_q_x, z_e_x.detach())
@@ -100,7 +101,7 @@ def test():
 
 def generate_samples():
     x, _ = test_loader.__iter__().next()
-    x = x[:32].cuda()
+    x = x[:32].to(DEVICE)
     x_tilde, _, _ = model(x)
 
     x_cat = torch.cat([x, x_tilde], 0)
