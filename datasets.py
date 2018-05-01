@@ -37,16 +37,19 @@ class MiniImagenet(data.Dataset):
 
         self.image_folder = os.path.join(os.path.expanduser(root), 'images')
         if train:
-            split = 'train'
+            split = self.splits['train']
         elif valid:
-            split = 'valid'
+            split = self.splits['valid']
         elif test:
-            split = 'test'
+            split = self.splits['test']
         else:
             raise ValueError('Unknown split.')
         self.split_filename = os.path.join(os.path.expanduser(root), split)
         if download:
             self.download()
+        if not self._check_exists():
+            raise RuntimeError('Dataset not found. You can use `download=True` '
+                               'to download it')
 
         # Extract filenames and labels
         self._data = []
