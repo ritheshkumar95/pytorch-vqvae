@@ -103,7 +103,7 @@ def main(args):
         train(train_loader, model, optimizer, args, writer)
         loss, _ = test(valid_loader, model, args, writer)
 
-        reconstruction = generate_samples(fixed_images, model)
+        reconstruction = generate_samples(fixed_images, model, args)
         grid = make_grid(reconstruction, nrow=8, range=(-1, 1), normalize=True)
         writer.add_image('reconstruction', reconstruction.cpu(), epoch)
 
