@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
-from torchvision.utils import save_image
+from torchvision.utils import save_image, make_grid
 
 from modules import AutoEncoder, to_scalar
 from datasets import MiniImagenet
@@ -58,6 +58,12 @@ def test(data_loader, model, args, writer):
 
     return loss_recons.item(), loss_vq.item()
 
+def generate_samples(images, model, args):
+    with torch.no_grad():
+        images = images.to(args.device)
+        x_tilde, _, _ = model(images)
+    return x_tilde
+
 def main(args):
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
     save_filename = './models/{0}/model.pt'.format(args.output_folder)
@@ -68,8 +74,10 @@ def main(args):
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
 
-    # Define the train & test datasets
+    # Define the train, valid & test datasets
     train_dataset = MiniImagenet(args.data_folder, train=True,
+        download=True, transform=transform)
+    valid_dataset = MiniImagenet(args.data_folder, valid=True,
         download=True, transform=transform)
     test_dataset = MiniImagenet(args.data_folder, test=True,
         download=True, transform=transform)
@@ -77,9 +85,16 @@ def main(args):
     train_loader = torch.utils.data.DataLoader(train_dataset,
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset,
+    valid_loader = torch.utils.data.DataLoader(valid_dataset,
         batch_size=args.batch_size, shuffle=False, drop_last=True,
         num_workers=args.num_workers, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+        batch_size=32, shuffle=False)
+
+    # Fixed images for Tensorboard
+    fixed_images, _ = next(iter(test_loader))
+    fixed_grid = make_grid(fixed_images, nrow=8, range=(-1, 1))
+    writer.add_image('original', fixed_grid, 0)
 
     model = AutoEncoder(3, args.hidden_size, args.k).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -87,7 +102,10 @@ def main(args):
     best_loss = -1.
     for epoch in range(args.num_epochs):
         train(train_loader, model, optimizer, args, writer)
-        loss, _ = test(test_loader, model, args, writer)
+        loss, _ = test(valid_loader, model, args, writer)
+
+        reconstruction = generate_samples(fixed_images, model)
+        writer.add_image('reconstruction', reconstruction.cpu(), epoch)
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
