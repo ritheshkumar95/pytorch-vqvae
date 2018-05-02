@@ -18,15 +18,15 @@ def train(data_loader, model, optimizer, args, writer):
         z_q_x.retain_grad()
 
         loss_recons = F.mse_loss(x_tilde, images)
-        loss_recons.backward(retain_grad=True)
+        loss_recons.backward(retain_graph=True)
 
         # Straight-through estimator
-        z_e_x.backward(z_q_x.grad, retain_grad=True)
+        z_e_x.backward(z_q_x.grad, retain_graph=True)
 
         # Vector quantization objective
         model.embedding.zero_grad()
         loss_vq = F.mse_loss(z_q_x, z_e_x.detach())
-        loss_vq.backward(retain_grad=True)
+        loss_vq.backward(retain_graph=True)
 
         # Commitment objective
         loss_commit = args.beta * F.mse_loss(z_e_x, z_q_x.detach())
@@ -59,6 +59,9 @@ def test(data_loader, model, args, writer):
     return loss_recons.item(), loss_vq.item()
 
 def main(args):
+    writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
+    save_filename = './models/{0}/model.pt'.format(args.output_folder)
+
     transform = transforms.Compose([
         transforms.RandomResizedCrop(128),
         transforms.ToTensor(),
@@ -80,7 +83,6 @@ def main(args):
 
     model = AutoEncoder(3, args.hidden_size, args.k).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
 
     best_loss = -1.
     for epoch in range(args.num_epochs):
@@ -89,7 +91,7 @@ def main(args):
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
-            with open('models/{0}_autoencoder.pt', 'wb') as f:
+            with open(save_filename, 'wb') as f:
                 torch.save(model.state_dict(), f)
 
 if __name__ == '__main__':
