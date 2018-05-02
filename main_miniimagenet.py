@@ -66,8 +66,10 @@ def main(args):
     ])
 
     # Define the train & test datasets
-    train_dataset = MiniImagenet(args.data_folder, train=True, download=True)
-    test_dataset = MiniImagenet(args.data_folder, test=True, download=True)
+    train_dataset = MiniImagenet(args.data_folder, train=True,
+        download=True, transform=transform)
+    test_dataset = MiniImagenet(args.data_folder, test=True,
+        download=True, transform=transform)
     # Define the data loaders
     train_loader = torch.utils.data.DataLoader(train_dataset,
         batch_size=args.batch_size, shuffle=False,
