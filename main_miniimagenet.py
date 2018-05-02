@@ -35,7 +35,6 @@ def train(data_loader, model, optimizer, args, writer):
         # Logs
         writer.add_scalar('loss/train/reconstruction', loss_recons.item(), args.steps)
         writer.add_scalar('loss/train/quantization', loss_vq.item(), args.steps)
-        writer.add_scalar('loss/train/commitment', loss_commit.item(), args.steps)
 
         optimizer.step()
         args.steps += 1
