@@ -22,6 +22,7 @@ N_LAYERS = 15
 K = 512
 LR = 3e-4
 
+DEVICE = torch.device('cuda') # torch.device('cpu')
 
 preproc_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -42,14 +43,14 @@ test_loader = torch.utils.data.DataLoader(
     num_workers=NUM_WORKERS, pin_memory=True
 )
 
-autoencoder = AutoEncoder(INPUT_DIM, VAE_DIM, K).cuda()
+autoencoder = AutoEncoder(INPUT_DIM, VAE_DIM, K).to(DEVICE)
 autoencoder.load_state_dict(
     torch.load('models/{}_autoencoder.pt'.format(DATASET))
 )
 autoencoder.eval()
 
-model = GatedPixelCNN(K, DIM, N_LAYERS).cuda()
-criterion = nn.CrossEntropyLoss().cuda()
+model = GatedPixelCNN(K, DIM, N_LAYERS).to(DEVICE)
+criterion = nn.CrossEntropyLoss().to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=LR)
 
 
@@ -57,8 +58,8 @@ def train():
     train_loss = []
     for batch_idx, (x, label) in enumerate(train_loader):
         start_time = time.time()
-        x = x.cuda()
-        label = label.cuda()
+        x = x.to(DEVICE)
+        label = label.to(DEVICE)
 
         # Get the latent codes for image x
         latents, _ = autoencoder.encode(x)
@@ -93,8 +94,8 @@ def test():
     val_loss = []
     with torch.no_grad():
         for batch_idx, (x, label) in enumerate(test_loader):
-            x = x.cuda()
-            label = label.cuda()
+            x = x.to(DEVICE)
+            label = label.to(DEVICE)
 
             latents, _ = autoencoder.encode(x)
             logits = model(latents.detach(), label)
@@ -114,7 +115,7 @@ def test():
 
 def generate_samples():
     label = torch.arange(10).expand(10, 10).contiguous().view(-1)
-    label = label.long().cuda()
+    label = label.to(device=DEVICE, dtype=torch.int64)
 
     latents = model.generate(label, shape=LATENT_SHAPE, batch_size=100)
     x_tilde, _ = autoencoder.decode(latents)
@@ -129,7 +130,7 @@ def generate_samples():
 
 def generate_reconstructions():
     x, _ = test_loader.__iter__().next()
-    x = x[:32].cuda()
+    x = x[:32].to(DEVICE)
 
     latents, _ = autoencoder.encode(x)
     x_tilde, _ = autoencoder.decode(latents)
