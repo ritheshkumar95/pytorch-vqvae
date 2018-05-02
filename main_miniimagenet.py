@@ -89,11 +89,11 @@ def main(args):
         batch_size=args.batch_size, shuffle=False, drop_last=True,
         num_workers=args.num_workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_dataset,
-        batch_size=32, shuffle=False)
+        batch_size=32, shuffle=True)
 
     # Fixed images for Tensorboard
     fixed_images, _ = next(iter(test_loader))
-    fixed_grid = make_grid(fixed_images, nrow=8, range=(-1, 1))
+    fixed_grid = make_grid(fixed_images, nrow=8, range=(-1, 1), normalize=True)
     writer.add_image('original', fixed_grid, 0)
 
     model = AutoEncoder(3, args.hidden_size, args.k).to(args.device)
@@ -105,6 +105,7 @@ def main(args):
         loss, _ = test(valid_loader, model, args, writer)
 
         reconstruction = generate_samples(fixed_images, model)
+        grid = make_grid(reconstruction, nrow=8, range=(-1, 1), normalize=True)
         writer.add_image('reconstruction', reconstruction.cpu(), epoch)
 
         if (epoch == 0) or (loss < best_loss):
