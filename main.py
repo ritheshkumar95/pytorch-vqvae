@@ -7,17 +7,17 @@ from torchvision.utils import save_image
 import time
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 N_EPOCHS = 100
 PRINT_INTERVAL = 100
-DATASET = 'FashionMNIST'  # CIFAR10 | MNIST | FashionMNIST
+DATASET = 'CIFAR10'  # CIFAR10 | MNIST | FashionMNIST
 NUM_WORKERS = 4
 
-INPUT_DIM = 1  # 3 (RGB) | 1 (Grayscale)
+INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
 DIM = 256
 K = 512
 LAMDA = 1
-LR = 2e-4
+LR = 3e-4
 
 
 preproc_transform = transforms.Compose([
