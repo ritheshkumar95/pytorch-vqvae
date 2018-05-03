@@ -88,7 +88,7 @@ def main(args):
         batch_size=args.batch_size, shuffle=False, drop_last=True,
         num_workers=args.num_workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_dataset,
-        batch_size=32, shuffle=True)
+        batch_size=16, shuffle=True)
 
     # Fixed images for Tensorboard
     fixed_images, _ = next(iter(test_loader))
