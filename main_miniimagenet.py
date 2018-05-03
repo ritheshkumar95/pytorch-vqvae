@@ -98,6 +98,11 @@ def main(args):
     model = AutoEncoder(3, args.hidden_size, args.k).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    # Generate the samples first once
+    reconstruction = generate_samples(fixed_images, model, args)
+    grid = make_grid(reconstruction.cpu(), nrow=8, range=(-1, 1), normalize=True)
+    writer.add_image('reconstruction', grid, 0)
+
     best_loss = -1.
     for epoch in range(args.num_epochs):
         train(train_loader, model, optimizer, args, writer)
@@ -105,7 +110,7 @@ def main(args):
 
         reconstruction = generate_samples(fixed_images, model, args)
         grid = make_grid(reconstruction.cpu(), nrow=8, range=(-1, 1), normalize=True)
-        writer.add_image('reconstruction', grid, epoch)
+        writer.add_image('reconstruction', grid, epoch + 1)
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
