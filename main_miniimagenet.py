@@ -165,6 +165,8 @@ if __name__ == '__main__':
     # Slurm
     if 'SLURM_JOB_ID' in os.environ:
         args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
+    if not os.path.exists('./models/{0}'.format(args.output_folder)):
+        os.makedirs('./models/{0}'.format(args.output_folder))
     args.steps = 0
 
     main(args)
