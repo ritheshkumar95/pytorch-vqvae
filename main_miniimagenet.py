@@ -104,8 +104,8 @@ def main(args):
         loss, _ = test(valid_loader, model, args, writer)
 
         reconstruction = generate_samples(fixed_images, model, args)
-        grid = make_grid(reconstruction, nrow=8, range=(-1, 1), normalize=True)
-        writer.add_image('reconstruction', reconstruction.cpu(), epoch)
+        grid = make_grid(reconstruction.cpu(), nrow=8, range=(-1, 1), normalize=True)
+        writer.add_image('reconstruction', grid, epoch)
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
