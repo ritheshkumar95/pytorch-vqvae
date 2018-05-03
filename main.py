@@ -5,7 +5,7 @@ from modules import AutoEncoder, to_scalar
 import numpy as np
 from torchvision.utils import save_image
 import time
-
+import os
 
 BATCH_SIZE = 32
 N_EPOCHS = 100
@@ -20,6 +20,10 @@ LAMDA = 1
 LR = 3e-4
 
 DEVICE = torch.device('cuda') # torch.device('cpu')
+
+for dir_ in ["models", "samples"]:
+    if not os.path.exists(dir_):
+        os.mkdir(dir_)
 
 preproc_transform = transforms.Compose([
     transforms.ToTensor(),
