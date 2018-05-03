@@ -133,7 +133,7 @@ if __name__ == '__main__':
         help='hidden size for the PixelCNN prior (default: 64)')
     parser.add_argument('--k', type=int, default=512,
         help='number of latent vectors (default: 512)')
-    parser.add_argument('--num_layers', type=int, default=15,
+    parser.add_argument('--num-layers', type=int, default=15,
         help='number of layers for the PixelCNN prior (default: 15)')
 
     # Optimization
