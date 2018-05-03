@@ -107,6 +107,7 @@ run.sh
 # Logs & Saves
 logs/
 saves/
+models/
 
 # Slurm
 *.out
