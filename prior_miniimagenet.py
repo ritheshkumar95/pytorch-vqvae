@@ -102,7 +102,7 @@ def main(args):
     best_loss = -1.
     for epoch in range(args.num_epochs):
         train(train_loader, model, prior, optimizer, args, writer)
-        loss, _ = test(valid_loader, model, prior, args, writer)
+        loss = test(valid_loader, model, prior, args, writer)
 
         # reconstruction = generate_samples(fixed_images, model, args)
         # grid = make_grid(reconstruction.cpu(), nrow=8, range=(-1, 1), normalize=True)

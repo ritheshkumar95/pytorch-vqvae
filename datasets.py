@@ -58,16 +58,24 @@ class MiniImagenet(data.Dataset):
             next(reader) # Skip the header
             for line in reader:
                 self._data.append(tuple(line))
+        self._fit_label_encoding()
 
     def __getitem__(self, index):
         filename, label = self._data[index]
         image = pil_loader(os.path.join(self.image_folder, filename))
+        label = self._label_encoder[label]
         if self.transform is not None:
             image = self.transform(image)
         if self.target_transform is not None:
             label = self.target_transform(label)
 
         return image, label
+
+    def _fit_label_encoding(self):
+        _, labels = zip(*self._data)
+        unique_labels = set(labels)
+        self._label_encoder = dict((label, idx)
+            for (idx, label) in enumerate(unique_labels))
 
     def _check_exists(self):
         return (os.path.exists(self.image_folder) 
