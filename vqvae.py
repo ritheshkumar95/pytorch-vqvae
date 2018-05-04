@@ -8,7 +8,7 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 from torch.distributions.normal import Normal
 
-from modules import VectorQuantizedAE, to_scalar
+from modules import VectorQuantizedVAE, to_scalar
 
 
 BATCH_SIZE = 32
@@ -21,7 +21,7 @@ INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
 DIM = 256
 K = 512
 LAMDA = 1
-LR = 3e-4
+LR = 1e-3
 
 DEVICE = torch.device('cuda')  # torch.device('cpu')
 
@@ -49,7 +49,7 @@ test_loader = torch.utils.data.DataLoader(
     num_workers=NUM_WORKERS, pin_memory=True
 )
 
-model = VectorQuantizedAE(INPUT_DIM, DIM, K).to(DEVICE)
+model = VectorQuantizedVAE(INPUT_DIM, DIM, K).to(DEVICE)
 print(model)
 opt = torch.optim.Adam(model.parameters(), lr=LR, amsgrad=True)
 

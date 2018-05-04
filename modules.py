@@ -19,40 +19,6 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 
-class ResBlock(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.ReLU(True),
-            nn.Conv2d(dim, dim, 3, 1, 1),
-            nn.ReLU(True),
-            nn.Conv2d(dim, dim, 1),
-        )
-
-    def forward(self, x):
-        return x + self.block(x)
-
-
-class VQEmbedding(nn.Module):
-    def __init__(self, K, D):
-        super().__init__()
-        self.embedding = nn.Embedding(K, D)
-        self.embedding.weight.data.uniform_(-1./K, 1./K)
-
-    def forward(self, z_e_x):
-        # z_e_x - (B, D, H, W)
-        # emb   - (K, D)
-
-        emb = self.embedding.weight
-        dists = torch.pow(
-            z_e_x.unsqueeze(1) - emb[None, :, :, None, None],
-            2
-        ).sum(2)
-
-        latents = dists.min(1)[1]
-        return latents
-
-
 class VAE(nn.Module):
     def __init__(self, input_dim, dim, z_dim):
         super().__init__()
@@ -90,11 +56,48 @@ class VAE(nn.Module):
         return x_tilde, kl_div
 
 
-class VectorQuantizedAE(nn.Module):
+class VQEmbedding(nn.Module):
+    def __init__(self, K, D):
+        super().__init__()
+        self.embedding = nn.Embedding(K, D)
+        self.embedding.weight.data.uniform_(-1./K, 1./K)
+
+    def forward(self, z_e_x):
+        # z_e_x - (B, D, H, W)
+        # emb   - (K, D)
+
+        emb = self.embedding.weight
+        dists = torch.pow(
+            z_e_x.unsqueeze(1) - emb[None, :, :, None, None],
+            2
+        ).sum(2)
+
+        latents = dists.min(1)[1]
+        return latents
+
+
+class ResBlock(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.ReLU(True),
+            nn.Conv2d(dim, dim, 3, 1, 1),
+            nn.BatchNorm2d(dim),
+            nn.ReLU(True),
+            nn.Conv2d(dim, dim, 1),
+            nn.BatchNorm2d(dim)
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
+
+
+class VectorQuantizedVAE(nn.Module):
     def __init__(self, input_dim, dim, K=512):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(input_dim, dim, 4, 2, 1),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 4, 2, 1),
             ResBlock(dim),
@@ -108,6 +111,7 @@ class VectorQuantizedAE(nn.Module):
             ResBlock(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, dim, 4, 2, 1),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
             nn.Tanh()

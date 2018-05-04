@@ -14,7 +14,7 @@ ALWAYS_SAVE = True
 DATASET = 'FashionMNIST'  # CIFAR10 | MNIST | FashionMNIST
 NUM_WORKERS = 4
 
-LATENT_SHAPE = (28, 28)  # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
+IMAGE_SHAPE = (28, 28)  # (32, 32) | (28, 28)
 INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
 K = 256
 DIM = 64
@@ -100,7 +100,7 @@ def generate_samples():
     label = torch.arange(10).expand(10, 10).contiguous().view(-1)
     label = label.long().cuda()
 
-    x_tilde = model.generate(label, shape=LATENT_SHAPE, batch_size=100)
+    x_tilde = model.generate(label, shape=IMAGE_SHAPE, batch_size=100)
     images = x_tilde.cpu().data.float() / (K - 1)
 
     save_image(
