@@ -65,7 +65,7 @@ def generate_samples(images, model, args):
 
 def main(args):
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
-    save_filename = './models/{0}/model.pt'.format(args.output_folder)
+    save_filename = './models/{0}'.format(args.output_folder)
 
     transform = transforms.Compose([
         transforms.RandomResizedCrop(128),
@@ -114,8 +114,10 @@ def main(args):
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
-            with open(save_filename, 'wb') as f:
+            with open('{0}/best.pt'.format(save_filename), 'wb') as f:
                 torch.save(model.state_dict(), f)
+        with open('{0}/model_{1}.pt'.format(save_filename, epoch + 1), 'wb') as f:
+            torch.save(model.state_dict(), f)
 
 if __name__ == '__main__':
     import argparse
