@@ -16,11 +16,11 @@ NUM_WORKERS = 4
 
 LATENT_SHAPE = (8, 8) # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
 INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
-DIM = 128
+DIM = 64
 VAE_DIM = 256
 N_LAYERS = 15
 K = 512
-LR = 3e-4
+LR = 1e-3
 
 DEVICE = torch.device('cuda') # torch.device('cpu')
 
@@ -45,13 +45,13 @@ test_loader = torch.utils.data.DataLoader(
 
 autoencoder = AutoEncoder(INPUT_DIM, VAE_DIM, K).to(DEVICE)
 autoencoder.load_state_dict(
-    torch.load('models/{}_autoencoder.pt'.format(DATASET))
+    torch.load('models/{}_vqvae.pt'.format(DATASET))
 )
 autoencoder.eval()
 
 model = GatedPixelCNN(K, DIM, N_LAYERS).to(DEVICE)
 criterion = nn.CrossEntropyLoss().to(DEVICE)
-opt = torch.optim.Adam(model.parameters(), lr=LR)
+opt = torch.optim.Adam(model.parameters(), lr=LR, amsgrad=True)
 
 
 def train():

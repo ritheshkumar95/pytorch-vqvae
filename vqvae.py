@@ -1,11 +1,15 @@
+import numpy as np
+import time
+from pathlib import Path
+
 import torch
 import torch.nn.functional as F
 from torchvision import datasets, transforms
-from modules import AutoEncoder, to_scalar
-import numpy as np
 from torchvision.utils import save_image
-import time
-import os
+from torch.distributions.normal import Normal
+
+from modules import VectorQuantizedAE, to_scalar
+
 
 BATCH_SIZE = 32
 N_EPOCHS = 100
@@ -19,11 +23,12 @@ K = 512
 LAMDA = 1
 LR = 3e-4
 
-DEVICE = torch.device('cuda') # torch.device('cpu')
+DEVICE = torch.device('cuda')  # torch.device('cpu')
 
-for dir_ in ["models", "samples"]:
-    if not os.path.exists(dir_):
-        os.mkdir(dir_)
+
+# Create directories if they don't exist
+Path('models').mkdir(exist_ok=True)
+Path('samples').mkdir(exist_ok=True)
 
 preproc_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -39,13 +44,14 @@ train_loader = torch.utils.data.DataLoader(
 test_loader = torch.utils.data.DataLoader(
     eval('datasets.'+DATASET)(
         '../data/{}/'.format(DATASET), train=False,
-        transform=preproc_transform
+        transform=preproc_transform,
     ), batch_size=BATCH_SIZE, shuffle=False,
     num_workers=NUM_WORKERS, pin_memory=True
 )
 
-model = AutoEncoder(INPUT_DIM, DIM, K).to(DEVICE)
-opt = torch.optim.Adam(model.parameters(), lr=LR)
+model = VectorQuantizedAE(INPUT_DIM, DIM, K).to(DEVICE)
+print(model)
+opt = torch.optim.Adam(model.parameters(), lr=LR, amsgrad=True)
 
 
 def train():
@@ -66,7 +72,7 @@ def train():
         z_e_x.backward(z_q_x.grad, retain_graph=True)
 
         # Vector quantization objective
-        model.embedding.zero_grad()
+        model.codebook.zero_grad()
         loss_vq = F.mse_loss(z_q_x, z_e_x.detach())
         loss_vq.backward(retain_graph=True)
 
@@ -75,7 +81,13 @@ def train():
         loss_commit.backward()
         opt.step()
 
-        train_loss.append(to_scalar([loss_recons, loss_vq]))
+        nll = -Normal(x_tilde, torch.ones_like(x_tilde)).log_prob(x)
+        log_px = nll.mean().item() - np.log(128) + np.log(K)
+        log_px /= np.log(2)
+
+        train_loss.append(
+            [log_px] + to_scalar([loss_recons, loss_vq])
+        )
 
         if (batch_idx + 1) % PRINT_INTERVAL == 0:
             print('\tIter [{}/{} ({:.0f}%)]\tLoss: {} Time: {}'.format(
@@ -113,7 +125,7 @@ def generate_samples():
 
     save_image(
         images,
-        'samples/reconstructions_{}.png'.format(DATASET),
+        'samples/vqvae_reconstructions_{}.png'.format(DATASET),
         nrow=8
     )
 
@@ -129,7 +141,7 @@ for epoch in range(1, N_EPOCHS):
         BEST_LOSS = cur_loss
         LAST_SAVED = epoch
         print("Saving model!")
-        torch.save(model.state_dict(), 'models/{}_autoencoder.pt'.format(DATASET))
+        torch.save(model.state_dict(), 'models/{}_vqvae.pt'.format(DATASET))
     else:
         print("Not saving model! Last saved: {}".format(LAST_SAVED))
 

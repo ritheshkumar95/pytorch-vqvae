@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
+from torch.distributions import kl_divergence
 
 
 def to_scalar(arr):
@@ -19,7 +21,7 @@ def weights_init(m):
 
 class ResBlock(nn.Module):
     def __init__(self, dim):
-        super(ResBlock, self).__init__()
+        super().__init__()
         self.block = nn.Sequential(
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 3, 1, 1),
@@ -31,9 +33,66 @@ class ResBlock(nn.Module):
         return x + self.block(x)
 
 
-class AutoEncoder(nn.Module):
+class VQEmbedding(nn.Module):
+    def __init__(self, K, D):
+        super().__init__()
+        self.embedding = nn.Embedding(K, D)
+        self.embedding.weight.data.uniform_(-1./K, 1./K)
+
+    def forward(self, z_e_x):
+        # z_e_x - (B, D, H, W)
+        # emb   - (K, D)
+
+        emb = self.embedding.weight
+        dists = torch.pow(
+            z_e_x.unsqueeze(1) - emb[None, :, :, None, None],
+            2
+        ).sum(2)
+
+        latents = dists.min(1)[1]
+        return latents
+
+
+class VAE(nn.Module):
+    def __init__(self, input_dim, dim, z_dim):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(input_dim, dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.Conv2d(dim, dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.Conv2d(dim, dim, 5, 1, 0),
+            nn.ReLU(True),
+            nn.Conv2d(dim, z_dim * 2, 3, 1, 0),
+        )
+
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(z_dim, dim, 3, 1, 0),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(dim, dim, 5, 1, 0),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(dim, dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
+            nn.Tanh()
+        )
+
+        self.apply(weights_init)
+
+    def forward(self, x):
+        mu, logvar = self.encoder(x).chunk(2, dim=1)
+
+        q_z_x = Normal(mu, logvar.mul(.5).exp())
+        p_z = Normal(torch.zeros_like(mu), torch.ones_like(logvar))
+        kl_div = kl_divergence(q_z_x, p_z).sum(1).mean()
+
+        x_tilde = self.decoder(q_z_x.rsample())
+        return x_tilde, kl_div
+
+
+class VectorQuantizedAE(nn.Module):
     def __init__(self, input_dim, dim, K=512):
-        super(AutoEncoder, self).__init__()
+        super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(input_dim, dim, 4, 2, 1),
             nn.ReLU(True),
@@ -42,9 +101,7 @@ class AutoEncoder(nn.Module):
             ResBlock(dim),
         )
 
-        self.embedding = nn.Embedding(K, dim)
-        # self.embedding.weight.data.copy_(1./K * torch.randn(K, 256))
-        self.embedding.weight.data.uniform_(-1./K, 1./K)
+        self.codebook = VQEmbedding(K, dim)
 
         self.decoder = nn.Sequential(
             ResBlock(dim),
@@ -60,20 +117,11 @@ class AutoEncoder(nn.Module):
 
     def encode(self, x):
         z_e_x = self.encoder(x)
-
-        z_e_x_transp = z_e_x.permute(0, 2, 3, 1)  # (B, H, W, C)
-        emb = self.embedding.weight.transpose(0, 1)  # (C, K)
-        dists = torch.pow(
-            z_e_x_transp.unsqueeze(4) - emb[None, None, None],
-            2
-        ).sum(-2)
-        latents = dists.min(-1)[1]
+        latents = self.codebook(z_e_x)
         return latents, z_e_x
 
     def decode(self, latents):
-        shp = latents.size() + (-1, )
-        z_q_x = self.embedding(latents.view(latents.size(0), -1))  # (B * H * W, C)
-        z_q_x = z_q_x.view(*shp).permute(0, 3, 1, 2)  # (B, C, H, W)
+        z_q_x = self.codebook.embedding(latents).permute(0, 3, 1, 2)  # (B, D, H, W)
         x_tilde = self.decoder(z_q_x)
         return x_tilde, z_q_x
 
@@ -191,8 +239,10 @@ class GatedPixelCNN(nn.Module):
 
     def generate(self, label, shape=(8, 8), batch_size=64):
         param = next(self.parameters())
-        x = torch.zeros((batch_size, *shape),
-            dtype=torch.int64, device=param.device)
+        x = torch.zeros(
+            (batch_size, *shape),
+            dtype=torch.int64, device=param.device
+        )
 
         for i in range(shape[0]):
             for j in range(shape[1]):
