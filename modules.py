@@ -10,7 +10,59 @@ def to_scalar(arr):
         return [x.item() for x in arr]
     else:
         return arr.item()
+class AutoEncoder(nn.Module):
+    def __init__(self, input_dim, dim, K=512):
+        super(AutoEncoder, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(input_dim, dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.Conv2d(dim, dim, 4, 2, 1),
+            ResBlock(dim),
+            ResBlock(dim),
+        )
 
+        self.embedding = nn.Embedding(K, dim)
+        # self.embedding.weight.data.copy_(1./K * torch.randn(K, 256))
+        self.embedding.weight.data.uniform_(-1./K, 1./K)
+
+        self.decoder = nn.Sequential(
+            ResBlock(dim),
+            ResBlock(dim),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(dim, dim, 4, 2, 1),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
+            nn.Tanh()
+        )
+
+        self.apply(weights_init)
+
+    def encode(self, x):
+        z_e_x = self.encoder(x)
+
+        z_e_x_transp = z_e_x.permute(0, 2, 3, 1)  # (B, H, W, C)
+        emb = self.embedding.weight.transpose(0, 1)  # (C, K)
+        dists = torch.pow(
+            z_e_x_transp.unsqueeze(4) - emb[None, None, None],
+            2
+        ).sum(-2)
+        latents = dists.min(-1)[1]
+        return latents, z_e_x
+ 
+
+    def decode(self, latents):
+        shp = latents.size() + (-1, )
+        z_q_x = self.embedding(latents.view(latents.size(0), -1))  # (B * H * W, C)
+        z_q_x = z_q_x.view(*shp).permute(0, 3, 1, 2)  # (B, C, H, W)
+        x_tilde = self.decoder(z_q_x)
+        return x_tilde, z_q_x
+
+    
+    
+    def forward(self, x):
+        latents, z_e_x = self.encode(x)
+        x_tilde, z_q_x = self.decode(latents)
+        return x_tilde, z_e_x, z_q_x
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -86,16 +138,31 @@ class VQEmbedding(nn.Module):
         return latents
 
 
+# class ResBlock(nn.Module):
+#     def __init__(self, dim):
+#         super().__init__()
+#         self.block = nn.Sequential(
+#             nn.ReLU(True),
+#             nn.Conv2d(dim, dim, 3, 1, 1),
+#             nn.BatchNorm2d(dim),
+#             nn.ReLU(True),
+#             nn.Conv2d(dim, dim, 1),
+#             nn.BatchNorm2d(dim)
+#         )
+
+#     def forward(self, x):
+#         return x + self.block(x)
+
+    
+
 class ResBlock(nn.Module):
     def __init__(self, dim):
-        super().__init__()
+        super(ResBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 3, 1, 1),
-            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 1),
-            nn.BatchNorm2d(dim)
         )
 
     def forward(self, x):
