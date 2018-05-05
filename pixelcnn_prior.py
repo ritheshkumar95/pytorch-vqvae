@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import datasets, transforms
-from modules import AutoEncoder, GatedPixelCNN, to_scalar
+from modules import VectorQuantizedVAE, GatedPixelCNN
 import numpy as np
 from torchvision.utils import save_image
 import time
@@ -14,11 +14,11 @@ ALWAYS_SAVE = True
 DATASET = 'CIFAR10'  # CIFAR10 | MNIST | FashionMNIST
 NUM_WORKERS = 4
 
-LATENT_SHAPE = (8, 8) # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
+LATENT_SHAPE = (8, 8)  # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
 INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
-DIM = 128
+DIM = 256
 VAE_DIM = 256
-N_LAYERS = 15
+N_LAYERS = 12
 K = 512
 LR = 3e-4
 
@@ -43,15 +43,15 @@ test_loader = torch.utils.data.DataLoader(
     num_workers=NUM_WORKERS, pin_memory=True
 )
 
-autoencoder = AutoEncoder(INPUT_DIM, VAE_DIM, K).to(DEVICE)
+autoencoder = VectorQuantizedVAE(INPUT_DIM, VAE_DIM, K).to(DEVICE)
 autoencoder.load_state_dict(
-    torch.load('models/{}_autoencoder.pt'.format(DATASET))
+    torch.load('models/{}_vqvae.pt'.format(DATASET))
 )
 autoencoder.eval()
 
 model = GatedPixelCNN(K, DIM, N_LAYERS).to(DEVICE)
 criterion = nn.CrossEntropyLoss().to(DEVICE)
-opt = torch.optim.Adam(model.parameters(), lr=LR)
+opt = torch.optim.Adam(model.parameters(), lr=LR, amsgrad=True)
 
 
 def train():
@@ -78,7 +78,7 @@ def train():
         loss.backward()
         opt.step()
 
-        train_loss.append(to_scalar(loss))
+        train_loss.append(loss.item())
 
         if (batch_idx + 1) % PRINT_INTERVAL == 0:
             print('\tIter: [{}/{} ({:.0f}%)]\tLoss: {} Time: {}'.format(
@@ -104,7 +104,7 @@ def test():
                 logits.view(-1, K),
                 latents.view(-1)
             )
-            val_loss.append(to_scalar(loss))
+            val_loss.append(loss.item())
 
     print('Validation Completed!\tLoss: {} Time: {}'.format(
         np.asarray(val_loss).mean(0),
@@ -128,25 +128,8 @@ def generate_samples():
     )
 
 
-def generate_reconstructions():
-    x, _ = test_loader.__iter__().next()
-    x = x[:32].to(DEVICE)
-
-    latents, _ = autoencoder.encode(x)
-    x_tilde, _ = autoencoder.decode(latents)
-    x_cat = torch.cat([x, x_tilde], 0)
-    images = (x_cat.cpu().data + 1) / 2
-
-    save_image(
-        images,
-        'samples/reconstructions_{}.png'.format(DATASET),
-        nrow=8
-    )
-
-
 BEST_LOSS = 999
 LAST_SAVED = -1
-generate_reconstructions()
 for epoch in range(1, N_EPOCHS):
     print("\nEpoch {}:".format(epoch))
     train()
