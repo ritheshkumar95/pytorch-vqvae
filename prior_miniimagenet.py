@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+import json
 from torchvision import transforms
 from torchvision.utils import save_image, make_grid
 
@@ -84,6 +85,10 @@ def main(args):
         num_workers=args.num_workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_dataset,
         batch_size=16, shuffle=True)
+
+    # Save the label encoder
+    with open('./models/{0}/labels.json'.format(args.output_folder), 'w') as f:
+        json.dump(train_dataset._label_encoder, f)
 
     # Fixed images for Tensorboard
     fixed_images, _ = next(iter(test_loader))
