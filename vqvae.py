@@ -81,12 +81,13 @@ def train():
         loss_commit.backward()
         opt.step()
 
-        nll = -Normal(x_tilde, torch.ones_like(x_tilde)).log_prob(x)
-        log_px = nll.mean().item() - np.log(128) + np.log(K)
+        N = x.numel()
+        nll = Normal(x_tilde, torch.ones_like(x_tilde)).log_prob(x)
+        log_px = nll.sum() / N + np.log(128) - np.log(K * 2)
         log_px /= np.log(2)
 
         train_loss.append(
-            [log_px] + to_scalar([loss_recons, loss_vq])
+            [log_px.item()] + to_scalar([loss_recons, loss_vq])
         )
 
         if (batch_idx + 1) % PRINT_INTERVAL == 0:

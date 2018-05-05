@@ -15,8 +15,11 @@ def to_scalar(arr):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.xavier_uniform_(m.weight.data)
-        m.bias.data.fill_(0)
+        try:
+            nn.init.xavier_uniform_(m.weight.data)
+            m.bias.data.fill_(0)
+        except AttributeError:
+            print("Skipping initialization of ", classname)
 
 
 class VAE(nn.Module):
@@ -24,20 +27,27 @@ class VAE(nn.Module):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(input_dim, dim, 4, 2, 1),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 4, 2, 1),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 5, 1, 0),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, z_dim * 2, 3, 1, 0),
+            nn.BatchNorm2d(z_dim * 2)
         )
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(z_dim, dim, 3, 1, 0),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, dim, 5, 1, 0),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, dim, 4, 2, 1),
+            nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
             nn.Tanh()
@@ -204,7 +214,7 @@ class GatedMaskedConv2d(nn.Module):
 class GatedPixelCNN(nn.Module):
     def __init__(self, input_dim=256, dim=64, n_layers=15):
         super().__init__()
-        self.dim = 64
+        self.dim = dim
 
         # Create embedding layer to embed input
         self.embedding = nn.Embedding(input_dim, dim)
@@ -225,10 +235,12 @@ class GatedPixelCNN(nn.Module):
 
         # Add the output layer
         self.output_conv = nn.Sequential(
-            nn.Conv2d(dim, dim, 1),
+            nn.Conv2d(dim, 512, 1),
             nn.ReLU(True),
-            nn.Conv2d(dim, input_dim, 1)
+            nn.Conv2d(512, input_dim, 1)
         )
+
+        self.apply(weights_init)
 
     def forward(self, x, label):
         shp = x.size() + (-1, )

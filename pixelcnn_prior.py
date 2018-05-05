@@ -11,16 +11,16 @@ BATCH_SIZE = 32
 N_EPOCHS = 100
 PRINT_INTERVAL = 100
 ALWAYS_SAVE = True
-DATASET = 'MNIST'  # CIFAR10 | MNIST | FashionMNIST
+DATASET = 'CIFAR10'  # CIFAR10 | MNIST | FashionMNIST
 NUM_WORKERS = 4
 
-LATENT_SHAPE = (7, 7)  # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
-INPUT_DIM = 1  # 3 (RGB) | 1 (Grayscale)
-DIM = 64
+LATENT_SHAPE = (8, 8)  # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
+INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
+DIM = 256
 VAE_DIM = 256
-N_LAYERS = 15
+N_LAYERS = 12
 K = 512
-LR = 1e-3
+LR = 3e-4
 
 DEVICE = torch.device('cuda') # torch.device('cpu')
 

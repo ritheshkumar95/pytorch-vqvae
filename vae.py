@@ -14,13 +14,13 @@ from modules import VAE
 BATCH_SIZE = 32
 N_EPOCHS = 100
 PRINT_INTERVAL = 500
-DATASET = 'CIFAR10'  # CIFAR10 | MNIST | FashionMNIST
+DATASET = 'FashionMNIST'  # CIFAR10 | MNIST | FashionMNIST
 NUM_WORKERS = 4
 
-INPUT_DIM = 3
+INPUT_DIM = 1
 DIM = 256
 Z_DIM = 128
-LR = 3e-4
+LR = 1e-3
 
 
 preproc_transform = transforms.Compose([
