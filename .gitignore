@@ -5,7 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+*.ipynb
+samples/*
 # Distribution / packaging
 .Python
 env/
@@ -24,7 +25,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+.*
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
