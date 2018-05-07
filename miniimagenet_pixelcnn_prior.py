@@ -117,7 +117,7 @@ if __name__ == '__main__':
     import os
     import multiprocessing as mp
 
-    parser = argparse.ArgumentParser(description='Prior VQ-VAE')
+    parser = argparse.ArgumentParser(description='PixelCNN Prior for VQ-VAE')
 
     # General
     parser.add_argument('--data-folder', type=str,
