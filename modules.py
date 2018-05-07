@@ -212,7 +212,7 @@ class GatedMaskedConv2d(nn.Module):
 
 
 class GatedPixelCNN(nn.Module):
-    def __init__(self, input_dim=256, dim=64, n_layers=15):
+    def __init__(self, input_dim=256, dim=64, n_layers=15, n_classes=10):
         super().__init__()
         self.dim = dim
 
@@ -230,7 +230,7 @@ class GatedPixelCNN(nn.Module):
             residual = False if i == 0 else True
 
             self.layers.append(
-                GatedMaskedConv2d(mask_type, dim, kernel, residual)
+                GatedMaskedConv2d(mask_type, dim, kernel, residual, n_classes)
             )
 
         # Add the output layer
