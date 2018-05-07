@@ -53,12 +53,6 @@ def test(data_loader, model, prior, args, writer):
 
     return loss.item()
 
-# def generate_samples(images, model, args):
-#     with torch.no_grad():
-#         images = images.to(args.device)
-#         x_tilde, _, _ = model(images)
-#     return x_tilde
-
 def main(args):
     writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
     save_filename = './models/{0}/prior.pt'.format(args.output_folder)
@@ -101,17 +95,17 @@ def main(args):
         model.load_state_dict(state_dict)
     model.eval()
 
-    prior = GatedPixelCNN(args.k, args.hidden_size_prior, args.num_layers).to(args.device)
+    prior = GatedPixelCNN(args.k, args.hidden_size_prior,
+        args.num_layers, n_classes=len(train_dataset._label_encoder)).to(args.device)
     optimizer = torch.optim.Adam(prior.parameters(), lr=args.lr)
 
     best_loss = -1.
     for epoch in range(args.num_epochs):
         train(train_loader, model, prior, optimizer, args, writer)
+        # The validation loss is not properly computed since
+        # the classes in the train and valid splits of Mini-Imagenet
+        # do not overlap.
         loss = test(valid_loader, model, prior, args, writer)
-
-        # reconstruction = generate_samples(fixed_images, model, args)
-        # grid = make_grid(reconstruction.cpu(), nrow=8, range=(-1, 1), normalize=True)
-        # writer.add_image('reconstruction', grid, epoch + 1)
 
         if (epoch == 0) or (loss < best_loss):
             best_loss = loss
