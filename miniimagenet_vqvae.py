@@ -24,7 +24,7 @@ def train(data_loader, model, optimizer, args, writer):
         z_e_x.backward(z_q_x.grad, retain_graph=True)
 
         # Vector quantization objective
-        model.embedding.zero_grad()
+        model.codebook.embedding.zero_grad()
         loss_vq = F.mse_loss(z_q_x, z_e_x.detach())
         loss_vq.backward(retain_graph=True)
 
