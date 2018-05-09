@@ -5,7 +5,7 @@ import json
 from torchvision import transforms
 from torchvision.utils import save_image, make_grid
 
-from modules import AutoEncoder, GatedPixelCNN
+from modules import VectorQuantizedVAE, GatedPixelCNN
 from datasets import MiniImagenet
 
 from tensorboardX import SummaryWriter
@@ -89,7 +89,7 @@ def main(args):
     fixed_grid = make_grid(fixed_images, nrow=8, range=(-1, 1), normalize=True)
     writer.add_image('original', fixed_grid, 0)
 
-    model = AutoEncoder(3, args.hidden_size_vae, args.k).to(args.device)
+    model = VectorQuantizedVAE(3, args.hidden_size_vae, args.k).to(args.device)
     with open(args.model, 'rb') as f:
         state_dict = torch.load(f)
         model.load_state_dict(state_dict)
