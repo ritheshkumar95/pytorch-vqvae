@@ -59,3 +59,7 @@ class VectorQuantizationStraightThrough(Function):
             grad_codebook.index_add_(0, indices, grad_output_flatten)
 
         return (grad_inputs, grad_codebook)
+
+vq = VectorQuantization.apply
+vq_st = VectorQuantizationStraightThrough.apply
+__all__ = [vq, vq_st]
