@@ -54,7 +54,8 @@ class VectorQuantizationStraightThrough(Function):
             indices, codebook = ctx.saved_tensors
             embedding_size = codebook.size(1)
 
-            grad_output_flatten = grad_output.view(-1, embedding_size)
+            grad_output_flatten = (grad_output.contiguous()
+                                              .view(-1, embedding_size))
             grad_codebook = torch.zeros_like(codebook)
             grad_codebook.index_add_(0, indices, grad_output_flatten)
 
