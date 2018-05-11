@@ -118,7 +118,7 @@ def generate_samples():
     label = label.to(device=DEVICE, dtype=torch.int64)
 
     latents = model.generate(label, shape=LATENT_SHAPE, batch_size=100)
-    x_tilde, _ = autoencoder.decode(latents)
+    x_tilde = autoencoder.decode(latents)
     images = (x_tilde.cpu().data + 1) / 2
 
     save_image(
