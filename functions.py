@@ -35,6 +35,7 @@ class VectorQuantizationStraightThrough(Function):
         indices = vq(inputs, codebook)
         indices_flatten = indices.view(-1)
         ctx.save_for_backward(indices_flatten, codebook)
+        ctx.mark_non_differentiable(indices_flatten)
 
         codes_flatten = torch.index_select(codebook, dim=0,
             index=indices_flatten)

@@ -29,16 +29,20 @@ def test_vq():
 def test_vq_st_shape():
     inputs = torch.rand((2, 3, 5, 7), dtype=torch.float32, requires_grad=True)
     codebook = torch.rand((11, 7), dtype=torch.float32, requires_grad=True)
-    codes = vq_st(inputs, codebook)
+    codes, indices = vq_st(inputs, codebook)
 
     assert codes.size() == (2, 3, 5, 7)
     assert codes.requires_grad
     assert codes.dtype == torch.float32
 
+    assert indices.size() == (2 * 3 * 5,)
+    assert not indices.requires_grad
+    assert indices.dtype == torch.int64
+
 def test_vq_st_gradient1():
     inputs = torch.rand((2, 3, 5, 7), dtype=torch.float32, requires_grad=True)
     codebook = torch.rand((11, 7), dtype=torch.float32, requires_grad=True)
-    codes = vq_st(inputs, codebook)
+    codes, _ = vq_st(inputs, codebook)
 
     grad_output = torch.rand((2, 3, 5, 7))
     grad_inputs, = torch.autograd.grad(codes, inputs,
@@ -51,7 +55,7 @@ def test_vq_st_gradient1():
 def test_vq_st_gradient2():
     inputs = torch.rand((2, 3, 5, 7), dtype=torch.float32, requires_grad=True)
     codebook = torch.rand((11, 7), dtype=torch.float32, requires_grad=True)
-    codes = vq_st(inputs, codebook)
+    codes, _ = vq_st(inputs, codebook)
 
     indices = vq(inputs, codebook)
     codes_torch = torch.embedding(codebook, indices, padding_idx=-1,
