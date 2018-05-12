@@ -80,9 +80,15 @@ class VQEmbedding(nn.Module):
 
     def straight_through(self, z_e_x):
         z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
-        z_q_x_ = vq_st(z_e_x_, self.embedding.weight)
+        z_q_x_, indices = vq_st(z_e_x_, self.embedding.weight)
         z_q_x = z_q_x_.permute(0, 3, 1, 2).contiguous()
-        return z_q_x
+
+        z_q_x_bar_flatten = torch.index_select(self.embedding.weight,
+            dim=0, index=indices)
+        z_q_x_bar_ = z_q_x_bar_flatten.view_as(z_e_x_)
+        z_q_x_bar = z_q_x_bar_.permute(0, 3, 1, 2).contiguous()
+
+        return z_q_x, z_q_x_bar
 
 
 class ResBlock(nn.Module):
@@ -140,8 +146,8 @@ class VectorQuantizedVAE(nn.Module):
 
     def forward(self, x):
         z_e_x = self.encoder(x)
-        z_q_x = self.codebook.straight_through(z_e_x)
-        x_tilde = self.decoder(z_q_x)
+        z_q_x_st, z_q_x = self.codebook.straight_through(z_e_x)
+        x_tilde = self.decoder(z_q_x_st)
         return x_tilde, z_e_x, z_q_x
 
 

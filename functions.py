@@ -40,10 +40,10 @@ class VectorQuantizationStraightThrough(Function):
             index=indices_flatten)
         codes = codes_flatten.view_as(inputs)
 
-        return codes
+        return (codes, indices_flatten)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output, grad_indices):
         grad_inputs, grad_codebook = None, None
 
         if ctx.needs_input_grad[0]:
