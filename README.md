@@ -12,6 +12,15 @@ python vqvae.py --data-folder /tmp/miniimagenet --output-folder models/vqvae
 ```
 python pixelcnn_prior.py --data-folder /tmp/miniimagenet --model models/vqvae --output-folder models/pixelcnn_prior
 ```
+### Datasets Tested
+#### Image
+1. MNIST
+2. FashionMNIST
+3. CIFAR10
+4. Mini-ImageNet
+
+#### Video
+1. Atari 2600 - Boxing (OpenAI Gym) [code](https://github.com/ritheshkumar95/pytorch-vqvae/tree/evan/video)
 
 ### Reconstructions from VQ-VAE
 Top 4 rows are Original Images. Bottom 4 rows are Reconstructions.
