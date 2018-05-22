@@ -15,22 +15,16 @@ def train(data_loader, model, optimizer, args, writer):
 
         optimizer.zero_grad()
         x_tilde, z_e_x, z_q_x = model(images)
-        z_q_x.retain_grad()
 
+        # Reconstruction loss
         loss_recons = F.mse_loss(x_tilde, images)
-        loss_recons.backward(retain_graph=True)
-
-        # Straight-through estimator
-        z_e_x.backward(z_q_x.grad, retain_graph=True)
-
         # Vector quantization objective
-        model.codebook.embedding.zero_grad()
         loss_vq = F.mse_loss(z_q_x, z_e_x.detach())
-        loss_vq.backward(retain_graph=True)
-
         # Commitment objective
-        loss_commit = args.beta * F.mse_loss(z_e_x, z_q_x.detach())
-        loss_commit.backward()
+        loss_commit = F.mse_loss(z_e_x, z_q_x.detach())
+
+        loss = loss_recons + loss_vq + args.beta * loss_commit
+        loss.backward()
 
         # Logs
         writer.add_scalar('loss/train/reconstruction', loss_recons.item(), args.steps)

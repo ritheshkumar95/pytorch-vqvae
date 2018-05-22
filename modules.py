@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from torch.distributions import kl_divergence
 
+from functions import vq, vq_st
 
 def to_scalar(arr):
     if type(arr) == list:
@@ -73,17 +74,21 @@ class VQEmbedding(nn.Module):
         self.embedding.weight.data.uniform_(-1./K, 1./K)
 
     def forward(self, z_e_x):
-        # z_e_x - (B, D, H, W)
-        # emb   - (K, D)
-
-        emb = self.embedding.weight
-        dists = torch.pow(
-            z_e_x.unsqueeze(1) - emb[None, :, :, None, None],
-            2
-        ).sum(2)
-
-        latents = dists.min(1)[1]
+        z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
+        latents = vq(z_e_x_, self.embedding.weight)
         return latents
+
+    def straight_through(self, z_e_x):
+        z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
+        z_q_x_, indices = vq_st(z_e_x_, self.embedding.weight)
+        z_q_x = z_q_x_.permute(0, 3, 1, 2).contiguous()
+
+        z_q_x_bar_flatten = torch.index_select(self.embedding.weight,
+            dim=0, index=indices)
+        z_q_x_bar_ = z_q_x_bar_flatten.view_as(z_e_x_)
+        z_q_x_bar = z_q_x_bar_.permute(0, 3, 1, 2).contiguous()
+
+        return z_q_x, z_q_x_bar
 
 
 class ResBlock(nn.Module):
@@ -132,16 +137,17 @@ class VectorQuantizedVAE(nn.Module):
     def encode(self, x):
         z_e_x = self.encoder(x)
         latents = self.codebook(z_e_x)
-        return latents, z_e_x
+        return latents
 
     def decode(self, latents):
         z_q_x = self.codebook.embedding(latents).permute(0, 3, 1, 2)  # (B, D, H, W)
         x_tilde = self.decoder(z_q_x)
-        return x_tilde, z_q_x
+        return x_tilde
 
     def forward(self, x):
-        latents, z_e_x = self.encode(x)
-        x_tilde, z_q_x = self.decode(latents)
+        z_e_x = self.encoder(x)
+        z_q_x_st, z_q_x = self.codebook.straight_through(z_e_x)
+        x_tilde = self.decoder(z_q_x_st)
         return x_tilde, z_e_x, z_q_x
 
 

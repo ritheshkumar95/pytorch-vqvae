@@ -14,7 +14,7 @@ def train(data_loader, model, prior, optimizer, args, writer):
     for images, labels in data_loader:
         with torch.no_grad():
             images = images.to(args.device)
-            latents, _ = model.encode(images)
+            latents = model.encode(images)
             latents = latents.detach()
 
         labels = labels.to(args.device)
@@ -39,7 +39,7 @@ def test(data_loader, model, prior, args, writer):
             images = images.to(args.device)
             labels = labels.to(args.device)
 
-            latents, _ = model.encode(images)
+            latents = model.encode(images)
             latents = latents.detach()
             logits = prior(latents, labels)
             logits = logits.permute(0, 2, 3, 1).contiguous()
