@@ -1,147 +1,202 @@
-import torch
-import torch.nn as nn
-from torchvision import datasets, transforms
-from modules import VectorQuantizedVAE, GatedPixelCNN
 import numpy as np
-from torchvision.utils import save_image
-import time
+import torch
+import torch.nn.functional as F
+import json
+from torchvision import transforms
+from torchvision.utils import save_image, make_grid
 
+from modules import VectorQuantizedVAE, GatedPixelCNN
+from datasets import MiniImagenet
 
-BATCH_SIZE = 32
-N_EPOCHS = 100
-PRINT_INTERVAL = 100
-ALWAYS_SAVE = True
-DATASET = 'CIFAR10'  # CIFAR10 | MNIST | FashionMNIST
-NUM_WORKERS = 4
+from tensorboardX import SummaryWriter
 
-LATENT_SHAPE = (8, 8)  # (8, 8) -> 32x32 images, (7, 7) -> 28x28 images
-INPUT_DIM = 3  # 3 (RGB) | 1 (Grayscale)
-DIM = 256
-VAE_DIM = 256
-N_LAYERS = 12
-K = 512
-LR = 3e-4
+def train(data_loader, model, prior, optimizer, args, writer):
+    for images, labels in data_loader:
+        with torch.no_grad():
+            images = images.to(args.device)
+            latents = model.encode(images)
+            latents = latents.detach()
 
-DEVICE = torch.device('cuda') # torch.device('cpu')
-
-preproc_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-train_loader = torch.utils.data.DataLoader(
-    eval('datasets.'+DATASET)(
-        '../data/{}/'.format(DATASET), train=True, download=True,
-        transform=preproc_transform,
-    ), batch_size=BATCH_SIZE, shuffle=False,
-    num_workers=NUM_WORKERS, pin_memory=True
-)
-test_loader = torch.utils.data.DataLoader(
-    eval('datasets.'+DATASET)(
-        '../data/{}/'.format(DATASET), train=False,
-        transform=preproc_transform
-    ), batch_size=BATCH_SIZE, shuffle=False,
-    num_workers=NUM_WORKERS, pin_memory=True
-)
-
-autoencoder = VectorQuantizedVAE(INPUT_DIM, VAE_DIM, K).to(DEVICE)
-autoencoder.load_state_dict(
-    torch.load('models/{}_vqvae.pt'.format(DATASET))
-)
-autoencoder.eval()
-
-model = GatedPixelCNN(K, DIM, N_LAYERS).to(DEVICE)
-criterion = nn.CrossEntropyLoss().to(DEVICE)
-opt = torch.optim.Adam(model.parameters(), lr=LR, amsgrad=True)
-
-
-def train():
-    train_loss = []
-    for batch_idx, (x, label) in enumerate(train_loader):
-        start_time = time.time()
-        x = x.to(DEVICE)
-        label = label.to(DEVICE)
-
-        # Get the latent codes for image x
-        latents, _ = autoencoder.encode(x)
-
-        # Train PixelCNN with latent codes
-        latents = latents.detach()
-        logits = model(latents, label)
+        labels = labels.to(args.device)
+        logits = prior(latents, labels)
         logits = logits.permute(0, 2, 3, 1).contiguous()
 
-        loss = criterion(
-            logits.view(-1, K),
-            latents.view(-1)
-        )
-
-        opt.zero_grad()
+        optimizer.zero_grad()
+        loss = F.cross_entropy(logits.view(-1, args.k),
+                               latents.view(-1))
         loss.backward()
-        opt.step()
 
-        train_loss.append(loss.item())
+        # Logs
+        writer.add_scalar('loss/train', loss.item(), args.steps)
 
-        if (batch_idx + 1) % PRINT_INTERVAL == 0:
-            print('\tIter: [{}/{} ({:.0f}%)]\tLoss: {} Time: {}'.format(
-                batch_idx * len(x), len(train_loader.dataset),
-                PRINT_INTERVAL * batch_idx / len(train_loader),
-                np.asarray(train_loss)[-PRINT_INTERVAL:].mean(0),
-                time.time() - start_time
-            ))
+        optimizer.step()
+        args.steps += 1
 
-
-def test():
-    start_time = time.time()
-    val_loss = []
+def test(data_loader, model, prior, args, writer):
     with torch.no_grad():
-        for batch_idx, (x, label) in enumerate(test_loader):
-            x = x.to(DEVICE)
-            label = label.to(DEVICE)
+        loss = 0.
+        for images, labels in data_loader:
+            images = images.to(args.device)
+            labels = labels.to(args.device)
 
-            latents, _ = autoencoder.encode(x)
-            logits = model(latents.detach(), label)
+            latents = model.encode(images)
+            latents = latents.detach()
+            logits = prior(latents, labels)
             logits = logits.permute(0, 2, 3, 1).contiguous()
-            loss = criterion(
-                logits.view(-1, K),
-                latents.view(-1)
-            )
-            val_loss.append(loss.item())
+            loss += F.cross_entropy(logits.view(-1, args.k),
+                                    latents.view(-1))
 
-    print('Validation Completed!\tLoss: {} Time: {}'.format(
-        np.asarray(val_loss).mean(0),
-        time.time() - start_time
-    ))
-    return np.asarray(val_loss).mean(0)
+        loss /= len(data_loader)
 
+    # Logs
+    writer.add_scalar('loss/valid', loss.item(), args.steps)
 
-def generate_samples():
-    label = torch.arange(10).expand(10, 10).contiguous().view(-1)
-    label = label.to(device=DEVICE, dtype=torch.int64)
+    return loss.item()
 
-    latents = model.generate(label, shape=LATENT_SHAPE, batch_size=100)
-    x_tilde = autoencoder.decode(latents)
-    images = (x_tilde.cpu().data + 1) / 2
+def main(args):
+    writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
+    save_filename = './models/{0}/prior.pt'.format(args.output_folder)
 
-    save_image(
-        images,
-        'samples/samples_{}.png'.format(DATASET),
-        nrow=10
-    )
+    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10']:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        if args.dataset == 'mnist':
+            # Define the train & test datasets
+            train_dataset = datasets.MNIST(args.data_folder, train=True,
+                download=True, transform=transform)
+            test_dataset = datasets.MNIST(args.data_folder, train=False,
+                transform=transform)
+            num_channels = 1
+        elif args.dataset == 'fashion-mnist':
+            # Define the train & test datasets
+            train_dataset = datasets.FashionMNIST(args.data_folder,
+                train=True, download=True, transform=transform)
+            test_dataset = datasets.FashionMNIST(args.data_folder,
+                train=False, transform=transform)
+            num_channels = 1
+        elif args.dataset == 'cifar10':
+            # Define the train & test datasets
+            train_dataset = datasets.CIFAR10(args.data_folder,
+                train=True, download=True, transform=transform)
+            test_dataset = datasets.CIFAR10(args.data_folder,
+                train=False, transform=transform)
+            num_channels = 3
+        valid_dataset = test_dataset
+    elif args.dataset == 'miniimagenet':
+        transform = transforms.Compose([
+            transforms.RandomResizedCrop(128),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        # Define the train, valid & test datasets
+        train_dataset = MiniImagenet(args.data_folder, train=True,
+            download=True, transform=transform)
+        valid_dataset = MiniImagenet(args.data_folder, valid=True,
+            download=True, transform=transform)
+        test_dataset = MiniImagenet(args.data_folder, test=True,
+            download=True, transform=transform)
+        num_channels = 3
 
+    # Define the data loaders
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.num_workers, pin_memory=True)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset,
+        batch_size=args.batch_size, shuffle=False, drop_last=True,
+        num_workers=args.num_workers, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+        batch_size=16, shuffle=True)
 
-BEST_LOSS = 999
-LAST_SAVED = -1
-for epoch in range(1, N_EPOCHS):
-    print("\nEpoch {}:".format(epoch))
-    train()
-    cur_loss = test()
+    # Save the label encoder
+    with open('./models/{0}/labels.json'.format(args.output_folder), 'w') as f:
+        json.dump(train_dataset._label_encoder, f)
 
-    if ALWAYS_SAVE or cur_loss <= BEST_LOSS:
-        BEST_LOSS = cur_loss
-        LAST_SAVED = epoch
+    # Fixed images for Tensorboard
+    fixed_images, _ = next(iter(test_loader))
+    fixed_grid = make_grid(fixed_images, nrow=8, range=(-1, 1), normalize=True)
+    writer.add_image('original', fixed_grid, 0)
 
-        print("Saving model!")
-        torch.save(model.state_dict(), 'models/{}_pixelcnn.pt'.format(DATASET))
-    else:
-        print("Not saving model! Last saved: {}".format(LAST_SAVED))
+    model = VectorQuantizedVAE(num_channels, args.hidden_size_vae, args.k).to(args.device)
+    with open(args.model, 'rb') as f:
+        state_dict = torch.load(f)
+        model.load_state_dict(state_dict)
+    model.eval()
 
-    generate_samples()
+    prior = GatedPixelCNN(args.k, args.hidden_size_prior,
+        args.num_layers, n_classes=len(train_dataset._label_encoder)).to(args.device)
+    optimizer = torch.optim.Adam(prior.parameters(), lr=args.lr)
+
+    best_loss = -1.
+    for epoch in range(args.num_epochs):
+        train(train_loader, model, prior, optimizer, args, writer)
+        # The validation loss is not properly computed since
+        # the classes in the train and valid splits of Mini-Imagenet
+        # do not overlap.
+        loss = test(valid_loader, model, prior, args, writer)
+
+        if (epoch == 0) or (loss < best_loss):
+            best_loss = loss
+            with open(save_filename, 'wb') as f:
+                torch.save(prior.state_dict(), f)
+
+if __name__ == '__main__':
+    import argparse
+    import os
+    import multiprocessing as mp
+
+    parser = argparse.ArgumentParser(description='PixelCNN Prior for VQ-VAE')
+
+    # General
+    parser.add_argument('--data-folder', type=str,
+        help='name of the data folder')
+    parser.add_argument('--dataset', type=str,
+        help='name of the dataset (mnist, fashion-mnist, cifar10, miniimagenet)')
+    parser.add_argument('--model', type=str,
+        help='filename containing the model')
+
+    # Latent space
+    parser.add_argument('--hidden-size-vae', type=int, default=256,
+        help='size of the latent vectors (default: 256)')
+    parser.add_argument('--hidden-size-prior', type=int, default=64,
+        help='hidden size for the PixelCNN prior (default: 64)')
+    parser.add_argument('--k', type=int, default=512,
+        help='number of latent vectors (default: 512)')
+    parser.add_argument('--num-layers', type=int, default=15,
+        help='number of layers for the PixelCNN prior (default: 15)')
+
+    # Optimization
+    parser.add_argument('--batch-size', type=int, default=128,
+        help='batch size (default: 128)')
+    parser.add_argument('--num-epochs', type=int, default=100,
+        help='number of epochs (default: 100)')
+    parser.add_argument('--lr', type=float, default=3e-4,
+        help='learning rate for Adam optimizer (default: 3e-4)')
+
+    # Miscellaneous
+    parser.add_argument('--output-folder', type=str, default='prior',
+        help='name of the output folder (default: prior)')
+    parser.add_argument('--num-workers', type=int, default=mp.cpu_count() - 1,
+        help='number of workers for trajectories sampling (default: {0})'.format(mp.cpu_count() - 1))
+    parser.add_argument('--device', type=str, default='cpu',
+        help='set the device (cpu or cuda, default: cpu)')
+
+    args = parser.parse_args()
+
+    # Create logs and models folder if they don't exist
+    if not os.path.exists('./logs'):
+        os.makedirs('./logs')
+    if not os.path.exists('./models'):
+        os.makedirs('./models')
+    # Device
+    args.device = torch.device(args.device
+        if torch.cuda.is_available() else 'cpu')
+    # Slurm
+    if 'SLURM_JOB_ID' in os.environ:
+        args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
+    if not os.path.exists('./models/{0}'.format(args.output_folder)):
+        os.makedirs('./models/{0}'.format(args.output_folder))
+    args.steps = 0
+
+    main(args)
