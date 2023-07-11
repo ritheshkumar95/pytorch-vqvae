@@ -64,7 +64,8 @@ def main(args):
     if args.dataset in ['mnist', 'fashion-mnist', 'cifar10']:
         transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.Normalize((0.5), (0.5))
         ])
         if args.dataset == 'mnist':
             # Define the train & test datasets
@@ -150,9 +151,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='VQ-VAE')
 
     # General
-    parser.add_argument('--data-folder', type=str,
+    parser.add_argument('--data-folder', type=str, default='./data',
         help='name of the data folder')
-    parser.add_argument('--dataset', type=str,
+    parser.add_argument('--dataset', type=str, default='mnist',
         help='name of the dataset (mnist, fashion-mnist, cifar10, miniimagenet)')
 
     # Latent space
@@ -176,7 +177,7 @@ if __name__ == '__main__':
         help='name of the output folder (default: vqvae)')
     parser.add_argument('--num-workers', type=int, default=mp.cpu_count() - 1,
         help='number of workers for trajectories sampling (default: {0})'.format(mp.cpu_count() - 1))
-    parser.add_argument('--device', type=str, default='cpu',
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
         help='set the device (cpu or cuda, default: cpu)')
 
     args = parser.parse_args()
@@ -187,8 +188,7 @@ if __name__ == '__main__':
     if not os.path.exists('./models'):
         os.makedirs('./models')
     # Device
-    args.device = torch.device(args.device
-        if torch.cuda.is_available() else 'cpu')
+    args.device = torch.device(args.device)
     # Slurm
     if 'SLURM_JOB_ID' in os.environ:
         args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])
