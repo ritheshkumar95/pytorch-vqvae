@@ -8,13 +8,9 @@ class VectorQuantization(Function):
             embedding_size = codebook.size(1)
             inputs_size = inputs.size()
             inputs_flatten = inputs.view(-1, embedding_size)
-
-            codebook_sqr = torch.sum(codebook ** 2, dim=1)
-            inputs_sqr = torch.sum(inputs_flatten ** 2, dim=1, keepdim=True)
-
+            
             # Compute the distances to the codebook
-            distances = torch.addmm(codebook_sqr + inputs_sqr,
-                inputs_flatten, codebook.t(), alpha=-2.0, beta=1.0)
+            distances = torch.cdist(inputs_flatten, codebook, 2)
 
             _, indices_flatten = torch.min(distances, dim=1)
             indices = indices_flatten.view(*inputs_size[:-1])
